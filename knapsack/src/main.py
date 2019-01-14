@@ -1,5 +1,6 @@
-from GA import GA
 import numpy
+from GA import GA
+
 
 def load_inputs(path):
     inputs = []
@@ -20,6 +21,9 @@ if __name__ == '__main__':
     inputs, weights, capacity = load_inputs(path)
     ga = GA(inputs, weights, capacity)
     winner = ga.run()
+
     print("Resenje:", [inputs[i] for i, bit in enumerate(winner) if bit])
-    print(winner)   # ovo brisemo posle
+    print("Bitna reprezentacija: ", winner)
     print("Ukupna vrednost: ", numpy.sum(winner * inputs, axis=0))
+    print("Kapacitet ranca: ", capacity)
+    print("Ukupna tezina: ", numpy.sum(winner * weights, axis=0))

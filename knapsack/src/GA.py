@@ -4,8 +4,10 @@ import numpy
 class GA:
     max_gens = 100
     pop_size = 100
-    num_parents = pop_size // 2
+    num_parents = pop_size // 5
     num_offspring = pop_size - num_parents
+    prob_mutation = 10
+    prob_crossover = 80
 
     def __init__(self, inputs, weights, capacity):
         # npr [[0 1 0 1 0 1 0], [1 - 1 -1= 120012}]]]
@@ -20,10 +22,14 @@ class GA:
         self.init_population()
         for i in range(GA.max_gens):
             self.next_gen()
+            # dodaj da stane ako nema promena za x generacija
 
         # nadji najboljeg i vrati ga
-        fitness = numpy.array([numpy.sum(chromosome * self.inputs, axis=0) for chromosome in self.population])
+        fitness = numpy.array([numpy.sum(chromosome * self.inputs, axis=0)
+                               if numpy.sum(chromosome * self.weights) <= self.capacity else -9999999
+                               for chromosome in self.population])
         max_fitness_idx = numpy.where(fitness == numpy.max(fitness))[0][0]
+
         return self.population[max_fitness_idx, :]
 
     def init_population(self):
@@ -39,12 +45,17 @@ class GA:
 
     def cal_pop_fitness(self):
         # mnozi svaki bit sa odgovarajucom vrednoscu predmeta i sabira da bi dobili fitness
-        fitness = numpy.array([numpy.sum(chromosome * self.inputs, axis=0) for chromosome in self.population])
+        fitness = numpy.array([numpy.sum(chromosome * self.inputs, axis=0)
+                               if numpy.sum(chromosome * self.weights) <= self.capacity else -9999999
+                               for chromosome in self.population])
+
         return fitness
 
     def select_mating_pool(self, fitness):
         # parents ce biti niz num_parents nizova po len(self.inputs) bita
-        parents = numpy.empty((GA.num_parents, len(self.inputs)))
+        parents = numpy.empty((GA.num_parents, self.input_size))
+        # proveri jel ovo oke
+        fitness = numpy.multiply(fitness, numpy.random.uniform(0, 1, GA.pop_size))
 
         for parent_num, parent in enumerate(parents):
             # nalazi indeks hromozoma sa max fitnessom
@@ -71,9 +82,11 @@ class GA:
         return offspring
 
     def mutation(self, offspring):
+        # dodaj da ne radi svima
         for idx in range(GA.num_offspring):
-            # biramo random gen i invertujemo ga
-            mutation_gene = numpy.random.randint(0, self.input_size, 1)
-            offspring[idx, mutation_gene] = 0 if offspring[idx, mutation_gene] else 1
+            # biramo random gen i invertujemo ga za 10% populacije
+            if numpy.random.randint(0, 100, 1) < GA.prob_mutation:
+                mutation_gene_idx = numpy.random.randint(0, self.input_size, 1)
+                offspring[idx, mutation_gene_idx] = 0 if offspring[idx, mutation_gene_idx] else 1
 
         return offspring
