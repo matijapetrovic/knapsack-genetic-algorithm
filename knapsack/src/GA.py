@@ -2,16 +2,18 @@ import numpy
 
 
 class GA:
-    max_gens = 100
+    max_gens = 500
     pop_size = 100
-    num_parents = pop_size // 5
-    num_offspring = pop_size - num_parents
-    prob_mutation = 10
+    tol = 50
+    num_elites = 1
+    num_offspring = pop_size - num_elites
+    prob_mutation = 5
     prob_crossover = 80
 
     def __init__(self, inputs, weights, capacity):
         # npr [[0 1 0 1 0 1 0], [1 - 1 -1= 120012}]]]
         self.population = []
+        self.fitness = None
         # npr [6 5 8 9 6 7 3]
         self.inputs = inputs
         self.input_size = len(inputs)
@@ -20,16 +22,16 @@ class GA:
 
     def run(self):
         self.init_population()
+        max_fitness = -1
+        num_gens_no_change = 0
         for i in range(GA.max_gens):
+            # kriterijum zaustavljanja
+            if num_gens_no_change >= GA.tol:
+                break
             self.next_gen()
-            # dodaj da stane ako nema promena za x generacija
+            num_gens_no_change = 0 if numpy.max(self.fitness) > max_fitness else num_gens_no_change + 1
 
-        # nadji najboljeg i vrati ga
-        fitness = numpy.array([numpy.sum(chromosome * self.inputs, axis=0)
-                               if numpy.sum(chromosome * self.weights) <= self.capacity else -9999999
-                               for chromosome in self.population])
-        max_fitness_idx = numpy.where(fitness == numpy.max(fitness))[0][0]
-
+        max_fitness_idx = numpy.where(self.fitness == numpy.max(self.fitness))[0][0]
         return self.population[max_fitness_idx, :]
 
     def init_population(self):
@@ -37,56 +39,56 @@ class GA:
         self.population = numpy.array([numpy.random.randint(2, size=self.input_size) for i in range(GA.pop_size)])
 
     def next_gen(self):
-        fitness = self.cal_pop_fitness()
-        parents = self.select_mating_pool(fitness)
-        offspring = self.mutation(self.crossover(parents))
-        self.population[0:GA.num_parents, :] = parents
-        self.population[GA.num_parents:, :] = offspring
+        self.cal_pop_fitness()
+        new_population = self.select_mating_pool()
+        self.mutate(new_population)
 
     def cal_pop_fitness(self):
         # mnozi svaki bit sa odgovarajucom vrednoscu predmeta i sabira da bi dobili fitness
-        fitness = numpy.array([numpy.sum(chromosome * self.inputs, axis=0)
-                               if numpy.sum(chromosome * self.weights) <= self.capacity else -9999999
-                               for chromosome in self.population])
+        self.fitness = numpy.array([numpy.sum(chromosome * self.inputs, axis=0)
+                                   if numpy.sum(chromosome * self.weights) <= self.capacity else -9999999
+                                   for chromosome in self.population])
 
-        return fitness
-
-    def select_mating_pool(self, fitness):
+    def select_mating_pool(self):
         # parents ce biti niz num_parents nizova po len(self.inputs) bita
-        parents = numpy.empty((GA.num_parents, self.input_size))
-        # proveri jel ovo oke
-        fitness = numpy.multiply(fitness, numpy.random.uniform(0, 1, GA.pop_size))
+        new_population = numpy.empty((GA.pop_size, self.input_size))
+        for i in range(GA.num_elites):
+            elite = self.population[numpy.where(self.fitness == numpy.max(self.fitness))[0][0], :]
+            new_population[i, :] = elite
 
-        for parent_num, parent in enumerate(parents):
-            # nalazi indeks hromozoma sa max fitnessom
-            max_fitness_idx = numpy.where(fitness == numpy.max(fitness))[0][0]
-            # stavlja ga u niz roditelja
-            parents[parent_num, :] = self.population[max_fitness_idx, :]
-            # podesavamo da ga ne uzmemo opet
-            fitness[max_fitness_idx] = -999999999
+        offspring_num = GA.num_elites
+        while offspring_num < GA.pop_size - GA.num_elites:
+            new_fitness = numpy.multiply(self.fitness, numpy.random.uniform(0, 1, GA.pop_size))
+            parent1_idx = numpy.where(self.fitness == numpy.max(self.fitness))[0][0]
+            new_fitness[parent1_idx] = -99999999
+            parent2_idx = numpy.where(self.fitness == numpy.max(self.fitness))[0][0]
+            if numpy.random.randint(0, 100, 1) < GA.prob_crossover:
+                new_population[offspring_num, :], new_population[offspring_num + 1, :] = self.crossover(
+                    self.population[parent1_idx], self.population[parent2_idx])
+                offspring_num += 2
+            else:
+                new_population[offspring_num, :] = self.population[parent1_idx, :]
+                offspring_num += 1
+                new_population[offspring_num, :] = self.population[parent2_idx, :]
 
-        return parents
+        return new_population
 
-    def crossover(self, parents):
-        offspring = numpy.empty((GA.num_offspring, self.input_size))
+    def crossover(self, parent1, parent2):
         crossover_point = numpy.uint8(self.input_size / 2)
+        offspring1 = numpy.empty(self.input_size)
+        offspring2 = numpy.empty(self.input_size)
+        offspring1[0:crossover_point] = parent1[0:crossover_point]
+        offspring1[crossover_point:] = parent2[crossover_point:]
+        offspring2[0:crossover_point] = parent2[0:crossover_point]
+        offspring2[crossover_point:] = parent1[crossover_point:]
 
-        for k in range(len(offspring)):
-            # uzimamo 2 roditelja i mesamo ih u dete
-            # promenicemo da ih uzima random!!!
-            parent1_idx = k % GA.num_parents
-            parent2_idx = (k + 1) % GA.num_parents
-            offspring[k, 0:crossover_point] = parents[parent1_idx, 0:crossover_point]
-            offspring[k, crossover_point:] = parents[parent2_idx, crossover_point:]
+        return offspring1, offspring2
 
-        return offspring
-
-    def mutation(self, offspring):
-        # dodaj da ne radi svima
+    def mutate(self, population):
         for idx in range(GA.num_offspring):
             # biramo random gen i invertujemo ga za 10% populacije
             if numpy.random.randint(0, 100, 1) < GA.prob_mutation:
                 mutation_gene_idx = numpy.random.randint(0, self.input_size, 1)
-                offspring[idx, mutation_gene_idx] = 0 if offspring[idx, mutation_gene_idx] else 1
+                population[idx, mutation_gene_idx] = 0 if population[idx, mutation_gene_idx] else 1
 
-        return offspring
+        return population
