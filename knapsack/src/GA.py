@@ -2,16 +2,17 @@ import numpy
 
 
 class GA:
-    max_gens = 200
-    pop_size = 100
-    tol = 50
-    prob_crossover = 0.8
-    num_elites = 2
-    num_crossover = int((pop_size - num_elites) * prob_crossover)
-    num_mutation = pop_size - num_crossover - num_elites
-
-    def __init__(self, knapsack):
+    def __init__(self, knapsack, max_gens, pop_size, tol, prob_crossover, num_elites):
         self.knapsack = knapsack
+        self.max_gens = max_gens
+        self.pop_size = pop_size
+        self.tol = tol
+        self.prob_crossover = prob_crossover
+        self.num_elites = num_elites
+
+        self.num_crossover = int((pop_size - num_elites) * prob_crossover)
+        self.num_mutation = pop_size - self.num_crossover - num_elites
+
         self.population = None
         self.fitness = None
         self.num_genes = len(knapsack.inputs)
@@ -20,9 +21,9 @@ class GA:
         self.init_population()
         max_fitness = -1
         num_gens_no_change = 0
-        for i in range(GA.max_gens):
+        for i in range(self.max_gens):
             # kriterijum zaustavljanja
-            if num_gens_no_change >= GA.tol:
+            if num_gens_no_change >= self.tol:
                 break
             self.next_gen()
             num_gens_no_change = 0 if numpy.max(self.fitness) > max_fitness else num_gens_no_change + 1
@@ -32,7 +33,7 @@ class GA:
 
     def init_population(self):
         # Inicijalizujemo populaciju pop_size velicine
-        self.population = numpy.array([self.init_individual() for i in range(GA.pop_size)])
+        self.population = numpy.array([self.init_individual() for i in range(self.pop_size)])
 
     def init_individual(self):
         individual = numpy.zeros(self.num_genes, dtype=int)
@@ -57,45 +58,48 @@ class GA:
                                     else -9999999 for chromosome in self.population])
 
     def create_new_generation(self):
-        new_population = numpy.zeros((GA.pop_size, self.num_genes), dtype=int)
+        new_population = numpy.zeros((self.pop_size, self.num_genes), dtype=int)
         # Prvo prepisujemo elite iz prosle generacije
-        new_population[:GA.num_elites, :] = self.select_elites(numpy.copy(self.fitness))
+        new_population[:self.num_elites, :] = self.select_elites(numpy.copy(self.fitness))
 
         # Ukrstamo jedinke num_crossover puta
-        for i in range(GA.num_elites, GA.num_crossover):
-            new_population[i, :] = self.crossover(self.select_parents_crossover(numpy.copy(self.fitness)))
+        for i in range(self.num_elites, self.num_crossover):
+            new_individual = numpy.ones(self.num_genes, dtype=int)
+            # Ukrstamo dok ne dobijemo validnu jedinku
+            while not self.knapsack.is_valid_knapsack(new_individual):
+                new_individual = self.crossover(self.select_parents_crossover(numpy.copy(self.fitness)))
+            new_population[i, :] = new_individual
 
         # Mutiramo jedinku num_mutation puta
-        for i in range(GA.num_elites + GA.num_crossover, GA.num_mutation):
-            new_population[i, :] = self.mutate(self.select_parent_mutation(numpy.copy(self.fitness)))
+        for i in range(self.num_elites + self.num_crossover, self.num_mutation):
+            new_individual = numpy.ones(self.num_genes, dtype=int)
+            # Mutiramo dok ne dobijemo validnu jedinku
+            while not self.knapsack.is_valid_knapsack(new_individual):
+                new_individual = self.mutate(self.select_parent_mutation(numpy.copy(self.fitness)))
+            new_population[i, :] = new_individual
 
         return new_population
 
     def crossover(self, parents):
-        # Uzimamo random gen iz hromozoma jedinke i sve gene do njega
+        # Uzimamo random gen iz hromozoma jedinke i sve gene do njeself
         # uzimamo od prvog roditelja, a sve gene posle od drugog
         crossover_point = numpy.random.randint(self.num_genes, size=1)[0]
         offspring = numpy.empty(self.num_genes, dtype=int)
         offspring[0:crossover_point] = parents[0][0:crossover_point]
         offspring[crossover_point:] = parents[1][crossover_point:]
 
-        # dodaj da proverava ogranicenje
-
         return offspring
 
     def mutate(self, individual):
-        # Uzimamo random gen iz hromozoma jedinke i flipujemo ga
+        # Uzimamo random gen iz hromozoma jedinke i flipujemo self
         gene_idx = numpy.random.randint(self.num_genes, size=1)
         individual[gene_idx] = 0 if individual[gene_idx] else 1
-        # Ako ne zadovoljava ogranicenje necemo da flipujemo
-        while not self.knapsack.is_valid_knapsack(individual):
-            individual[gene_idx] = 0 if individual[gene_idx] else 1
 
         return individual
 
     def select_elites(self, fitness):
-        elites = numpy.zeros((GA.num_elites, self.num_genes), dtype=int)
-        for i in range(GA.num_elites):
+        elites = numpy.zeros((self.num_elites, self.num_genes), dtype=int)
+        for i in range(self.num_elites):
             # Nalazimo najboljih num_elites jedinki iz prosle generacije
             # i netaknute ih cuvamo za sledecu generaciju
             elite_idx = numpy.where(self.fitness == numpy.max(fitness))[0][0]
@@ -121,12 +125,9 @@ class GA:
 
         return self.population[parent_idx]
 
-    @staticmethod
-    def roulette_wheel_selection(fitness, max_fitness):
+    def roulette_wheel_selection(self, fitness, max_fitness):
         while True:
             # Rulet selekcija sa "stohastickim prihvatanjem"
-            idx = numpy.random.randint(GA.pop_size, size=1, dtype=int)
+            idx = numpy.random.randint(self.pop_size, size=1, dtype=int)
             if numpy.random.uniform(0, 1) < fitness[idx] / max_fitness:
                 return idx[0]
-
-
